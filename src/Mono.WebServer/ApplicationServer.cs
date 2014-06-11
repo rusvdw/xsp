@@ -85,6 +85,8 @@ namespace Mono.WebServer
 		bool stop;
 		Socket listen_socket;
 
+
+        readonly ManualResetEvent runner_signal = new ManualResetEvent(false);
 		Thread runner;
 
 		// This is much faster than hashtable for typical cases.
@@ -295,6 +297,7 @@ namespace Mono.WebServer
 			listen_socket.Listen (backlog);
 			runner = new Thread (RunServer) {IsBackground = bgThread};
 			runner.Start ();
+            
 			stop = false;
 			return true;
 		}
@@ -330,7 +333,11 @@ namespace Mono.WebServer
 		void RealStop ()
 		{
 			started = false;
-			runner.Abort ();
+
+
+            runner_signal.Set();  // Signal the runner thead that we want to stop
+            runner.Join();        // and wait for it to complete before continuing
+			
 			ShutdownSockets ();
 			UnloadAll ();
 		}
@@ -367,8 +374,8 @@ namespace Mono.WebServer
 			if (runner.IsBackground)
 				return;
 
-			while (true) // Just sleep until we're aborted.
-				Thread.Sleep (1000000);
+            runner_signal.WaitOne();
+
 		}
 
 		void OnAccept (object sender, SocketAsyncEventArgs e)
